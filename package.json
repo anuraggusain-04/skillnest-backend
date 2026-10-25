@@ -1,23 +1,33 @@
-{
-  "name": "backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "dev": "nodemon server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.3.0"
-  }
+require('dotenv').config();
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const User = require('./models/User');
+
+const adminEmail = process.env.ADMIN_EMAIL || 'admin@skillnest.com';
+const adminPassword = process.env.ADMIN_PASSWORD;
+
+if (!adminPassword) {
+  console.error('ADMIN_PASSWORD is required to create an admin user.');
+  process.exit(1);
 }
+
+mongoose.connect(process.env.MONGO_URI).then(async () => {
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  const admin = new User({
+    name: 'Admin',
+    email: adminEmail,
+    password: hashedPassword,
+    role: 'admin'
+  });
+
+  const existingAdmin = await User.findOne({ email: adminEmail });
+  if (existingAdmin) {
+    console.log(`Admin already exists for ${adminEmail}`);
+    mongoose.connection.close();
+    return;
+  }
+
+  await admin.save();
+  console.log(`Admin created! Email: ${adminEmail}`);
+  mongoose.connection.close();
+}).catch(err => console.log(err));
