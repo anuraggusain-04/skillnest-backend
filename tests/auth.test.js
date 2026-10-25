@@ -1,4 +1,6 @@
 const request = require('supertest');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const app = require('../server');
@@ -9,6 +11,7 @@ let mongoServer;
 
 beforeAll(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+  process.env.NODE_ENV = 'test';
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri());
 });
@@ -59,10 +62,12 @@ describe('Authentication API', () => {
 
   it('logs in with valid credentials and returns a JWT', async () => {
     const password = 'Secret123!';
+    const hashed = await bcrypt.hash(password, 10);
+
     await User.create({
       name: 'Login User',
       email: 'login@example.com',
-      password: '$2a$10$WQ6mndu7mVQKfVJdM2M7JeV3z4uLn7M5m4jGQIR3VbtW9l6A2p4MC2'
+      password: hashed
     });
 
     const res = await request(app)
@@ -78,10 +83,12 @@ describe('Authentication API', () => {
   });
 
   it('rejects invalid login credentials', async () => {
+    const hashed = await bcrypt.hash('Secret123!', 10);
+
     await User.create({
       name: 'Bad User',
       email: 'bad@example.com',
-      password: 'hashedpw'
+      password: hashed
     });
 
     const res = await request(app)
@@ -102,7 +109,7 @@ describe('Course API', () => {
       role: 'user'
     });
 
-    const token = require('jsonwebtoken').sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     const res = await request(app)
       .post('/api/courses')
@@ -124,6 +131,7 @@ describe('Course API', () => {
       name: 'Student User',
       email: 'student@example.com',
       password: 'hashedpw',
+      role: 'user',
       enrolledCourses: []
     });
 
@@ -138,7 +146,7 @@ describe('Course API', () => {
     user.enrolledCourses.push(course._id);
     await user.save();
 
-    const token = require('jsonwebtoken').sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     const res = await request(app)
       .post(`/api/courses/${course._id}/enroll`)
